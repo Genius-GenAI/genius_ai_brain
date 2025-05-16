@@ -104,7 +104,7 @@ class WikiService:
                 f"Do not summarize the wiki content and please do not convert content to markdown. "
                 f"convert_to_markdown should be False. "
                 f"Please do not include any your description. "
-                f"Please return only title, content in JSON format with key 'page_title','content'"
+                f"Please return only title, page_id, version, content in JSON format with key 'page_title', 'page_id' ,'version', 'content'"
             )
             response = await self.session_service.query_agent(message)
 
@@ -117,17 +117,19 @@ class WikiService:
                         if "text" in part:
                             try:
                                 # Parse the JSON response
-                                json_response = json.loads(part["text"])
+                                json_response = json.loads(part["text"].replace("```json", "").replace("```", ""))
                                 if not isinstance(json_response, dict):
                                     raise Exception("Response is not a JSON object")
 
                                 # Validate required fields
-                                if "page_title" not in json_response or "content" not in json_response:
+                                if "page_title" not in json_response or "content" not in json_response or "page_id" not in json_response or "version" not in json_response:
                                     raise Exception("Missing required fields in JSON response")
 
                                 return {
                                     "page_title": json_response["page_title"],
-                                    "content": json_response["content"]
+                                    "page_id": json_response["page_id"],
+                                    "content": json_response["content"],
+                                    "version": json_response["version"]
                                 }
                             except json.JSONDecodeError as e:
                                 raise Exception(f"Failed to parse JSON response: {str(e)}")
@@ -246,8 +248,9 @@ class WikiService:
             self,
             wiki_url: str,
             merged_content: str,
-            page_title: str
-    ) -> str:
+            page_title: str,
+            page_id: str
+    ) -> dict[str:str]:
         """
         Update wiki page with the merged content from /wiki/merge-content and return only the updated content
         """
@@ -263,42 +266,46 @@ class WikiService:
                 await self.session_service.create_session()
 
             update_message = f"""
-            Please update the wiki page {wiki_url} with the following content.
+            Please update the wiki page: {wiki_url} with the following content. The wiki page id: {page_id}
             Important instructions:
-            1. Keep the page title as: {page_title}
+            1. Keep the title as: {page_title}
             2. Keep all existing metadata and structure
-            3. Only update the content while preserving the page format
-            4. Ensure the content is properly formatted in Confluence wiki markup
-            5. Do not add any explanations or descriptions in your response
-            6. Return only the final wiki content
+            3. Should return version, title, page ID as json format with key 'page_title', 'page_id' ,'version'
             
             Content to update:
             ---
             {merged_content}
             ---
             """
-
-            # Log the update message for debugging
-            print(f"Update message for {wiki_url}:")
-            print(update_message)
             
             response = await self.session_service.query_agent(update_message)
             if not response:
                 raise Exception("No response received from agent for update")
 
-            # Log the raw response for debugging
-            print(f"Raw response from agent:")
-            print(response)
+            # Extract and parse the JSON response
+            for event in reversed(response):
+                if (event.get("author") == "assistant" and
+                        "content" in event and
+                        "parts" in event["content"]):
+                    for part in event["content"]["parts"]:
+                        if "text" in part:
+                            try:
+                                # Parse the JSON response
+                                json_response = json.loads(part["text"].replace("```json", "").replace("```", ""))
+                                if not isinstance(json_response, dict):
+                                    raise Exception("Response is not a JSON object")
 
-            content = self._extract_content_from_response(response)
-            if not content or not content.strip():
-                raise Exception("Failed to extract valid content from update response")
+                                # Validate required fields
+                                if "page_title" not in json_response or "page_id" not in json_response or "version" not in json_response:
+                                    raise Exception("Missing required fields in JSON response")
 
-            # Log the extracted content for debugging
-            print(f"Extracted content:")
-            print(content)
-
-            return content
+                                return {
+                                    "page_title": json_response["page_title"],
+                                    "page_id": json_response["page_id"],
+                                    "version": json_response["version"]
+                                }
+                            except json.JSONDecodeError as e:
+                                raise Exception(f"Failed to parse JSON response: {str(e)}")
 
         except Exception as e:
             print(f"Error in update_wiki_with_merged_content: {str(e)}")
@@ -326,6 +333,7 @@ class WikiService:
             summary_content = await self.summary_service.summarize_content(conversation)
             if not summary_content:
                 raise Exception("Failed to generate summary content")
+            print("Step 1: Done")
 
             # Step 2: Get wiki content
             wiki_data = await self.get_wiki_content(wiki_url)
@@ -333,7 +341,10 @@ class WikiService:
                 raise Exception("Failed to get wiki content or missing required fields")
 
             page_title = wiki_data["page_title"]
-            page_content = wiki_data["page_title"]
+            page_id = wiki_data["page_id"]
+            version = wiki_data["version"]
+
+            page_content = wiki_data["content"]
 
             # Step 3: Merge the summary into wiki content
             merged_content = await self.merge_wiki_content(
@@ -343,17 +354,20 @@ class WikiService:
                 created_date
             )
 
-            print("Merged content:", merged_content)
 
             # Step 4: Update the wiki page
-            final_content = await self.update_wiki_with_merged_content(
+            result = await self.update_wiki_with_merged_content(
                 wiki_url,
                 merged_content,
-                page_title
+                page_title,
+                page_id
             )
 
+            print(f"Step 4: Done, result : {result}")
+
             return {
-                "update_content": final_content,
+                "result": "result",
+                "merged_content": merged_content,
                 "summary_content": summary_content
             }
 
