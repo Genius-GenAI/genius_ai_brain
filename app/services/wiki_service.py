@@ -1,14 +1,24 @@
-
 from typing import Dict, Any
 from .session_service import SessionService
 from .summary_service import SummaryService
 import json
+import logging
+import time
+from datetime import datetime
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('WikiService')
 
 class WikiService:
     def __init__(self):
         self.session_service = SessionService()
         self.summary_service = SummaryService(session_service=self.session_service)
+        logger.info("WikiService initialized")
 
     def _extract_content_from_response(self, response: list) -> str:
         """
@@ -20,15 +30,16 @@ class WikiService:
         Returns:
             Extracted content as string
         """
+        logger.debug("Starting content extraction from response")
         if not isinstance(response, list):
-            print(f"Invalid response format: {type(response)}")
-            print(f"Response content: {response}")
+            logger.error(f"Invalid response format: {type(response)}")
+            logger.error(f"Response content: {response}")
             raise Exception("Invalid response format: expected list")
 
         # Get the last response from the assistant
         for event in reversed(response):
             if not isinstance(event, dict):
-                print(f"Invalid event format: {type(event)}")
+                logger.warning(f"Invalid event format: {type(event)}")
                 continue
                 
             if (event.get("author") == "assistant" and
@@ -37,7 +48,7 @@ class WikiService:
                 
                 for part in event["content"]["parts"]:
                     if not isinstance(part, dict):
-                        print(f"Invalid part format: {type(part)}")
+                        logger.warning(f"Invalid part format: {type(part)}")
                         continue
 
                     if "text" in part and isinstance(part["text"], str):
@@ -45,12 +56,13 @@ class WikiService:
                         # Clean up the text
                         cleaned_text = text.replace("```html", "").replace("```", "").strip()
                         if cleaned_text:
+                            logger.debug("Successfully extracted content")
                             return cleaned_text
                         else:
-                            print("Extracted text was empty after cleaning")
+                            logger.warning("Extracted text was empty after cleaning")
 
-        print("Could not find valid content in response")
-        print(f"Full response: {response}")
+        logger.error("Could not find valid content in response")
+        logger.error(f"Full response: {response}")
         raise Exception("Could not find valid content in assistant response")
 
     def _extract_page_name(self, response: list) -> str:
@@ -325,51 +337,130 @@ class WikiService:
         3. Merge summary into wiki content
         4. Update wiki page
         """
+        process_start_time = time.time()
+        logger.info(f"Starting wiki processing workflow for URL: {wiki_url}")
+        logger.info(f"Thread Slack URL: {thread_slack_url}")
+        logger.info(f"Created date: {created_date}")
+
+        max_tries = 3
+        merged_content = ""
+        summary_content = ""
+
         try:
             # Create a session if needed
             await self.session_service.create_session()
+            logger.info("Session created/verified")
 
-            # Step 1: Summarize the conversation
-            summary_content = await self.summary_service.summarize_content(conversation)
-            if not summary_content:
-                raise Exception("Failed to generate summary content")
-            print("Step 1: Done")
+            for attempt in range(max_tries):
+                attempt_start_time = time.time()
+                logger.info(f"Starting attempt {attempt + 1} of {max_tries}")
 
-            # Step 2: Get wiki content
-            wiki_data = await self.get_wiki_content(wiki_url)
-            if not wiki_data or "content" not in wiki_data or "page_title" not in wiki_data:
-                raise Exception("Failed to get wiki content or missing required fields")
+                try:
+                    # Step 1: Summarize the conversation
+                    logger.info("Step 1: Starting conversation summarization")
+                    step_start_time = time.time()
+                    
+                    summary_content = await self.summary_service.summarize_content(conversation)
+                    if not summary_content:
+                        logger.error("Summary content is empty")
+                        raise Exception("Failed to generate summary content")
+                    
+                    step_duration = time.time() - step_start_time
+                    logger.info(f"Step 1: Summary generation completed in {step_duration:.2f} seconds")
+                    logger.debug(f"Generated summary: {summary_content[:200]}...")  # Log first 200 chars
 
-            page_title = wiki_data["page_title"]
-            page_id = wiki_data["page_id"]
-            version = wiki_data["version"]
+                    # Step 2: Get wiki content
+                    logger.info("Step 2: Retrieving wiki content")
+                    step_start_time = time.time()
+                    
+                    wiki_data = await self.get_wiki_content(wiki_url)
+                    if not wiki_data or "content" not in wiki_data or "page_title" not in wiki_data:
+                        logger.error("Invalid wiki data received")
+                        logger.error(f"Wiki data: {wiki_data}")
+                        raise Exception("Failed to get wiki content or missing required fields")
 
-            page_content = wiki_data["content"]
+                    page_title = wiki_data["page_title"]
+                    page_id = wiki_data["page_id"]
+                    version = wiki_data["version"]
+                    page_content = wiki_data["content"]
+                    
+                    step_duration = time.time() - step_start_time
+                    logger.info(f"Step 2: Wiki content retrieved in {step_duration:.2f} seconds")
+                    logger.info(f"Page details - Title: {page_title}, ID: {page_id}, Version: {version}")
+                    logger.debug(f"Page content length: {len(page_content)} characters")
 
-            # Step 3: Merge the summary into wiki content
-            merged_content = await self.merge_wiki_content(
-                page_content,
-                summary_content,
-                thread_slack_url,
-                created_date
-            )
+                    # Step 3: Merge the summary into wiki content
+                    logger.info("Step 3: Starting content merge")
+                    step_start_time = time.time()
+                    
+                    merged_content = await self.merge_wiki_content(
+                        page_content,
+                        summary_content,
+                        thread_slack_url,
+                        created_date
+                    )
+                    
+                    step_duration = time.time() - step_start_time
+                    logger.info(f"Step 3: Content merge completed in {step_duration:.2f} seconds")
+                    logger.debug(f"Merged content length: {len(merged_content)} characters")
 
+                    # Step 4: Update the wiki page
+                    logger.info("Step 4: Starting wiki page update")
+                    step_start_time = time.time()
+                    
+                    result = await self.update_wiki_with_merged_content(
+                        wiki_url,
+                        merged_content,
+                        page_title,
+                        page_id
+                    )
 
-            # Step 4: Update the wiki page
-            result = await self.update_wiki_with_merged_content(
-                wiki_url,
-                merged_content,
-                page_title,
-                page_id
-            )
+                    updated_page_title = result["page_title"]
+                    updated_page_id = result["page_id"]
+                    updated_version = result["version"]
+                    
+                    step_duration = time.time() - step_start_time
+                    logger.info(f"Step 4: Wiki update completed in {step_duration:.2f} seconds")
+                    logger.info(f"Updated page details - Title: {updated_page_title}, ID: {updated_page_id}, Version: {updated_version}")
 
-            print(f"Step 4: Done, result : {result}")
+                    attempt_duration = time.time() - attempt_start_time
+                    logger.info(f"Attempt {attempt + 1} completed in {attempt_duration:.2f} seconds")
 
-            return {
-                "result": "result",
-                "merged_content": merged_content,
-                "summary_content": summary_content
-            }
+                    if int(updated_version) > int(version):
+                        total_duration = time.time() - process_start_time
+                        logger.info(f"Wiki update successful! Total process duration: {total_duration:.2f} seconds")
+                        return {
+                            "result": "SUCCESSFUL TO UPDATE",
+                            "merged_content": merged_content,
+                            "summary_content": summary_content
+                        }
+
+                    logger.warning(f"Version did not increment. Old: {version}, New: {updated_version}")
+                    if attempt < max_tries - 1:
+                        logger.info("Retrying process...")
+                        continue
+
+                    logger.error("All attempts completed but version did not increment")
+                    return {
+                        "result": "FAILED TO UPDATE",
+                        "merged_content": merged_content,
+                        "summary_content": summary_content,
+                        "error": "Version did not increment after all attempts"
+                    }
+
+                except Exception as e:
+                    attempt_duration = time.time() - attempt_start_time
+                    logger.error(f"Attempt {attempt + 1} failed after {attempt_duration:.2f} seconds")
+                    logger.error(f"Error details: {str(e)}")
+                    
+                    if attempt < max_tries - 1:
+                        logger.info("Retrying process...")
+                        continue
+                    
+                    raise
 
         except Exception as e:
+            total_duration = time.time() - process_start_time
+            logger.error(f"Wiki processing failed after {total_duration:.2f} seconds")
+            logger.error(f"Final error: {str(e)}")
             raise Exception(f"Failed to process conversation to wiki: {str(e)}")
