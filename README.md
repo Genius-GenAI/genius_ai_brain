@@ -2,7 +2,37 @@
 
 This FastAPI application provides endpoints to interact with Atlassian wiki pages through an ADK agent. It supports getting wiki content, summarizing content, and updating wiki pages with summaries.
 
-## Setup
+## Setup Options
+
+You can run the application either using Docker or locally. Choose one of the following methods:
+
+### Option 1: Docker Setup (Recommended)
+
+1. Ensure you have Docker and Docker Compose installed on your system.
+
+2. Create a `.env` file in the root directory with the following variables:
+```
+AGENT_BASE_URL=http://agent:8000  # Docker service name for agent
+API_PORT=8081                     # Port for this API application
+```
+
+3. Build and start the services using Docker Compose:
+```bash
+# Build and start both services
+docker-compose up --build
+
+# Or run in detached mode
+docker-compose up -d
+
+# To stop the services
+docker-compose down
+```
+
+The services will be available at:
+- API Application: `http://localhost:8081`
+- Agent Service: `http://localhost:8000`
+
+### Option 2: Local Setup
 
 1. Create a virtual environment and activate it:
 ```bash
@@ -21,19 +51,38 @@ AGENT_BASE_URL=http://0.0.0.0:8000  # Your ADK agent server URL
 API_PORT=8081                        # Port for this API application
 ```
 
-## Running the Application
+4. Start the services:
 
-1. First, ensure your ADK agent server is running. You can start it using:
-```bash
-adk api_server  # This will run on port 8000
-```
+   a. First, start the ADK agent server:
+   ```bash
+   adk api_server  # This will run on port 8000
+   ```
 
-2. Then start this API application:
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload
-```
+   b. Then start the API application:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload
+   ```
 
-The API will be available at `http://localhost:8081`
+## Docker Configuration
+
+The application uses two Docker containers:
+
+1. **Agent Container** (`Dockerfile.agent`):
+   - Runs the ADK agent service
+   - Exposes port 8000
+   - Mounts the `agents/` directory for development
+
+2. **App Container** (`Dockerfile.app`):
+   - Runs the FastAPI application
+   - Exposes port 8081
+   - Mounts the `app/` directory for development
+   - Communicates with the agent container
+
+The containers are configured to work together using Docker Compose, which:
+- Sets up a bridge network for container communication
+- Manages environment variables
+- Handles volume mounting for development
+- Ensures proper service startup order
 
 ## API Endpoints
 
@@ -88,6 +137,48 @@ These can be modified by updating the `SessionService` class if needed.
 Once the application is running, you can access the interactive API documentation at:
 - Swagger UI: `http://localhost:8081/docs`
 - ReDoc: `http://localhost:8081/redoc`
+
+## Development
+
+### Docker Development
+- The Docker setup uses volume mounts for both the agent and app code
+- Changes to the code are reflected immediately without rebuilding
+- Logs from both services can be viewed using:
+  ```bash
+  docker-compose logs -f
+  ```
+
+### Local Development
+- Use the `--reload` flag with uvicorn for automatic reloading
+- Monitor the agent and app logs separately
+- Ensure both services are running on the correct ports
+
+## Troubleshooting
+
+### Docker Issues
+1. If containers fail to start:
+   ```bash
+   # Check container logs
+   docker-compose logs
+   
+   # Rebuild containers
+   docker-compose up --build --force-recreate
+   ```
+
+2. If services can't communicate:
+   - Verify the network exists: `docker network ls`
+   - Check container status: `docker-compose ps`
+   - Ensure environment variables are set correctly
+
+### Local Setup Issues
+1. Port conflicts:
+   - Ensure ports 8000 and 8081 are available
+   - Check if other services are using these ports
+
+2. Agent connection issues:
+   - Verify the agent is running
+   - Check the AGENT_BASE_URL in .env
+   - Ensure network connectivity
 
 ## ADK Agent Integration
 

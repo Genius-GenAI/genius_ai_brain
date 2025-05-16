@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - ./agents:/app/agents
+    networks:
+      - genius_ai_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    ports:
+      - "8081:8081"
+    environment:
+      - PYTHONPATH=/app
+      - AGENT_URL=http://agent:8000  # This allows the app to communicate with the agent
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      - agent
+    networks:
+      - genius_ai_network
+
+networks:
+  genius_ai_network:
+    driver: bridge 
