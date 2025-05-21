@@ -28,25 +28,6 @@ async def create_agent():
         ],
     )
 
-    # # Define individual agents
-    # agent = LlmAgent(
-    #     model=LiteLlm(model="openai/gpt-4o-mini"),
-    #     name='assistant',
-    #     instruction=(
-    #         'Help user summarize conversation, document. Help user merging, combine document'
-    #     ))
-
-    # # Create parent agent and assign children via sub_agents
-    # coordinator = LlmAgent(
-    #     name="assistant",
-    #     model=LiteLlm("openai/gpt-4o-mini"),
-    #     description="I coordinate agent and agent_with_tools.",
-    #     sub_agents=[  # Assign sub_agents here
-    #         agent,
-    #         agent_with_tools
-    #     ]
-    # )
-
     return agent_with_tools, common_exit_stack
 
 
