@@ -4,30 +4,31 @@ from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, SseServerParams
 from . import prompt
+import os
 
 atlassian_agent = LlmAgent(
-    model=LiteLlm(model="openai/gpt-4o"),
+    model=LiteLlm(model="openai/gpt-4.1"),
     name='atlassian_agent',
     instruction=prompt.atlassian_agent__instruction,
     output_key="origin_wiki_content"
 )
 
 summarizer_agent = LlmAgent(
-    model=LiteLlm(model="openai/gpt-4o"),
+    model=LiteLlm(model="openai/gpt-4.1"),
     name='summarizer_agent',
     instruction=prompt.summarizer_agent_instruction,
     output_key="new_technical_specifications"
 )
 
 modify_agent = LlmAgent(
-    model=LiteLlm(model="openai/gpt-4o"),
+    model=LiteLlm(model="openai/gpt-4.1"),
     name='modify_agent',
     instruction=prompt.modify_agent,
     output_key="updated_wiki_content"
 )
 
 coordinator_agent = LlmAgent(
-    model=LiteLlm(model="openai/gpt-4o"),
+    model=LiteLlm(model="openai/gpt-4.1"),
     name='coordinator_agent',
     instruction=prompt.coordinator_agent_instruction,
     sub_agents=[summarizer_agent, atlassian_agent, modify_agent]
@@ -55,7 +56,7 @@ async def get_tools_async():
     remote_tools, _ = await MCPToolset.from_server(
         connection_params=SseServerParams(
             # TODO: IMPORTANT! Change the path below to your remote MCP Server path
-            url="http://0.0.0.0:8081/sse"
+            url=os.getenv("MCP_ATLASSIAN_URL")
         ),
         async_exit_stack=common_exit_stack
     )
