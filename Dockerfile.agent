@@ -1,5 +1,4 @@
-# Use Python 3.9 slim image as base
-FROM python:3.9-slim
+FROM python:3.13-slim
 
 # Set working directory
 WORKDIR /app
@@ -27,4 +26,4 @@ COPY agents/ /app/agents/
 EXPOSE 8000
 
 # Command to run the agent
-CMD ["python", "-m", "agents.agent"] 
+CMD ["adk", "api_server"] 
