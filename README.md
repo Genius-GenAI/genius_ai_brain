@@ -12,8 +12,8 @@ You can run the application either using Docker or locally. Choose one of the fo
 
 2. Create a `.env` file in the root directory with the following variables:
 ```
-AGENT_BASE_URL=http://agent:8000  # Docker service name for agent
-API_PORT=8081                     # Port for this API application
+AGENT_BASE_URL=http://agent:8080  # Docker service name for agent
+API_PORT=8000                     # Port for this API application
 ```
 
 3. Build and start the services using Docker Compose:
@@ -29,8 +29,8 @@ docker-compose down
 ```
 
 The services will be available at:
-- API Application: `http://localhost:8081`
-- Agent Service: `http://localhost:8000`
+- API Application: `http://localhost:8000`
+- Agent Service: `http://localhost:8080`
 
 ### Option 2: Local Setup
 
@@ -47,20 +47,20 @@ pip install -r requirements.txt
 
 3. Create a `.env` file in the root directory with the following variables:
 ```
-AGENT_BASE_URL=http://0.0.0.0:8000  # Your ADK agent server URL
-API_PORT=8081                        # Port for this API application
+AGENT_BASE_URL=http://0.0.0.0:8080  # Your ADK agent server URL
+API_PORT=8000                        # Port for this API application
 ```
 
 4. Start the services:
 
    a. First, start the ADK agent server:
    ```bash
-   adk api_server  # This will run on port 8000
+   adk api_server --port 8080 # This will run on port 8000
    ```
 
    b. Then start the API application:
    ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
 ## Docker Configuration
@@ -69,12 +69,12 @@ The application uses two Docker containers:
 
 1. **Agent Container** (`Dockerfile.agent`):
    - Runs the ADK agent service
-   - Exposes port 8000
+   - Exposes port 8080
    - Mounts the `agents/` directory for development
 
 2. **App Container** (`Dockerfile.app`):
    - Runs the FastAPI application
-   - Exposes port 8081
+   - Exposes port 8000
    - Mounts the `app/` directory for development
    - Communicates with the agent container
 
@@ -135,8 +135,8 @@ These can be modified by updating the `SessionService` class if needed.
 ## API Documentation
 
 Once the application is running, you can access the interactive API documentation at:
-- Swagger UI: `http://localhost:8081/docs`
-- ReDoc: `http://localhost:8081/redoc`
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 ## Development
 

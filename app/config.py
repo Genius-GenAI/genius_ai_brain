@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings:
-    AGENT_BASE_URL: str = os.getenv("AGENT_BASE_URL", "http://0.0.0.0:8000")
+    AGENT_BASE_URL: str = os.getenv("AGENT_BASE_URL", "http://0.0.0.0:8080")
     API_PORT: int = int(os.getenv("API_PORT", "8082"))
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
     

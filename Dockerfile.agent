@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY agents/ /app/agents/
 
 # Expose the port the agent runs on
-EXPOSE 8000
+EXPOSE 8080
 
 # Command to run the agent
-CMD ["adk", "api_server"] 
+CMD ["adk", "api_server", "--port", "8080"] 
